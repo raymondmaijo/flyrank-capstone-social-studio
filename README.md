@@ -1,44 +1,144 @@
-# Social Media Studio
+## Social Media Studio backend
 
-A FastAPI-based backend for generating, validating, reviewing, scheduling, and publishing social content.
+The backend is a FastAPI service that helps a social media studio manage the full content lifecycle: ingesting source content, creating platform-specific variants, validating them, approving or rejecting them, scheduling publishing, and tracking publish results. The app entry and route registration are in app/main.py, and the actual endpoint definitions live in:
+- app/api/routes/posts.py
+- app/api/routes/variants.py
+- app/api/routes/review.py
+- app/api/routes/schedules.py
+- app/api/routes/publish_history.py
 
-## Quick start
+This backend supports:
+- Source ingestion from URL or markdown
+- Variant generation per platform
+- Constraint validation
+- Review flow with approval/rejection
+- Scheduling for approved content
+- Publish history and status tracking
+- Health check for service availability
+
+---
+
+## Full backend API surface
+
+### 1) Health check
+- GET /health
+
+### 2) Ingest post
+- POST /api/v1/posts/ingest
+
+### 3) Generate variant
+- POST /api/v1/variants/generate
+
+### 4) Approve variant
+- POST /api/v1/review/approve/{variant_id}
+
+### 5) Reject variant
+- POST /api/v1/review/reject/{variant_id}
+
+### 6) Create schedule
+- POST /api/v1/schedules/
+
+### 7) Get publish history
+- GET /api/v1/history/{variant_id}
+
+---
+
+## Exact command lines to run and test
+
+### Start with Docker
+```powershell
+cd C:\Flyrank\Capstone\flyrank-capstone-social-studio\social-studio
+docker compose down -v
+docker compose up --build -d
+```
+
+### Check health
+```powershell
+curl.exe -sS http://127.0.0.1:8000/health
+```
+
+### Open Swagger docs
+```powershell
+Start-Process http://127.0.0.1:8000/docs
+```
+
+### Ingest a post
+```powershell
+curl.exe -sS -X POST "http://127.0.0.1:8000/api/v1/posts/ingest" `
+  -H "Content-Type: application/json" `
+  -d "{\"source_type\":\"markdown\",\"markdown\":\"This is a sample social post for testing the studio pipeline.\"}"
+```
+
+### Save returned post id
+```powershell
+$POST = curl.exe -sS -X POST "http://127.0.0.1:8000/api/v1/posts/ingest" `
+  -H "Content-Type: application/json" `
+  -d "{\"source_type\":\"markdown\",\"markdown\":\"This is a sample social post for testing the studio pipeline.\"}" | ConvertFrom-Json
+
+$POST.id
+```
+
+### Generate a variant
+```powershell
+curl.exe -sS -X POST "http://127.0.0.1:8000/api/v1/variants/generate?post_id=$POST.id&platform=linkedin&tone=professional"
+```
+
+### Save the variant id
+```powershell
+$VARIANT = curl.exe -sS -X POST "http://127.0.0.1:8000/api/v1/variants/generate?post_id=$POST.id&platform=linkedin&tone=professional" | ConvertFrom-Json
+
+$VARIANT.id
+```
+
+### Approve variant
+```powershell
+curl.exe -sS -X POST "http://127.0.0.1:8000/api/v1/review/approve/$VARIANT.id"
+```
+
+### Reject variant
+```powershell
+curl.exe -sS -X POST "http://127.0.0.1:8000/api/v1/review/reject/$VARIANT.id?reason=Needs+more+review"
+```
+
+### Schedule approved variant
+```powershell
+curl.exe -sS -X POST "http://127.0.0.1:8000/api/v1/schedules/?variant_id=$VARIANT.id&scheduled_for=2026-09-02T12:00:00"
+```
+
+### Get publish history for a variant
+```powershell
+curl.exe -sS "http://127.0.0.1:8000/api/v1/history/$VARIANT.id"
+```
+
+---
+
+## Full one-shot test script
 
 ```powershell
-docker compose up --build
+cd C:\Flyrank\Capstone\flyrank-capstone-social-studio\social-studio
+docker compose up --build -d
+
+$POST = curl.exe -sS -X POST "http://127.0.0.1:8000/api/v1/posts/ingest" `
+  -H "Content-Type: application/json" `
+  -d "{\"source_type\":\"markdown\",\"markdown\":\"This is a sample social post for testing the studio pipeline.\"}" | ConvertFrom-Json
+
+$VARIANT = curl.exe -sS -X POST "http://127.0.0.1:8000/api/v1/variants/generate?post_id=$($POST.id)&platform=linkedin&tone=professional" | ConvertFrom-Json
+
+curl.exe -sS -X POST "http://127.0.0.1:8000/api/v1/review/approve/$($VARIANT.id)"
+curl.exe -sS -X POST "http://127.0.0.1:8000/api/v1/schedules/?variant_id=$($VARIANT.id)&scheduled_for=2026-09-02T12:00:00"
+curl.exe -sS "http://127.0.0.1:8000/api/v1/history/$($VARIANT.id)"
+
+$REJECTED = curl.exe -sS -X POST "http://127.0.0.1:8000/api/v1/variants/generate?post_id=$($POST.id)&platform=telegram&tone=professional" | ConvertFrom-Json
+curl.exe -sS -X POST "http://127.0.0.1:8000/api/v1/review/reject/$($REJECTED.id)?reason=Needs+more+review"
 ```
 
-Then open:
+---
 
-- API: http://localhost:8000/docs
-- Postgres: localhost:5432
-- Redis: localhost:6379
-
-## Environment
-
-Copy `.env.example` to `.env` and adjust values if needed.
-
-## Architecture
-
-```mermaid
-flowchart LR
-A[Blog Post URL or Markdown] --> B[Ingest + Store]
-B --> C[Variant Generator]
-C --> D[Constraint Validation]
-D --> E[Review Workflow]
-E --> F[Scheduler]
-F --> G[SocialPublisher Interface]
-G --> H[Telegram / Discord / Mastodon]
-G --> I[MockX / MockLinkedIn]
-F --> J[Publish History]
+## Local venv alternative
+```powershell
+cd C:\Flyrank\Capstone\flyrank-capstone-social-studio\social-studio
+$env:PYTHONPATH = (Get-Location).Path
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-## Features
-
-- URL or Markdown ingestion
-- Platform-specific variant generation
-- Constraint validation
-- Review workflow with draft/approved/rejected/published lifecycle
-- Durable scheduler
-- Adapter-based publishing
-- Idempotent publish history
+Then use the same curl commands above.
