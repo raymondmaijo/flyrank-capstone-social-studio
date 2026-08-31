@@ -5,8 +5,13 @@ from app.api.routes.publish_history import router as history_router
 from app.api.routes.review import router as review_router
 from app.api.routes.schedules import router as schedules_router
 from app.api.routes.variants import router as variants_router
+from app.database import init_db
 
 app = FastAPI(title="Social Media Studio API")
+
+@app.on_event("startup")
+def startup_event():
+    init_db()
 
 app.include_router(posts_router)
 app.include_router(variants_router)
